@@ -14,10 +14,21 @@
 
   --font-sans: "Schibsted Grotesk", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
 }
 
 @layer base {
   body {
     @apply bg-bg text-ink font-sans antialiased;
   }
+  
+  pre, code, .font-mono {
+    @apply font-mono;
+  }
+}
+
+.dot {
+  @apply w-2 h-2 rounded-full inline-block mr-2;
 }

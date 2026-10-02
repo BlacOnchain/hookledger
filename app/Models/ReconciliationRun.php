@@ -7,19 +7,19 @@ use Illuminate\Database\Eloquent\Model;
 class ReconciliationRun extends Model
 {
     public $timestamps = false;
-    
+
     protected $fillable = [
         'checked_count',
         'repaired_count',
         'failed_count',
-        'errors',
+        'logs',
         'started_at',
-        'finished_at'
+        'finished_at',
     ];
 
     protected $casts = [
-        'errors' => 'array',
+        'logs' => 'array',
         'started_at' => 'datetime',
-        'finished_at' => 'datetime'
+        'finished_at' => 'datetime',
     ];
 }

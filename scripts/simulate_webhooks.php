@@ -5,8 +5,8 @@
  * Sends variations of webhooks to test engine resilience.
  */
 
-$url = 'http://localhost/api/webhooks/paystack'; // Target endpoint
-$secret = 'sk_test_mock_secret';
+$url = getenv('APP_URL') . '/api/webhooks/paystack';
+$secret = getenv('PAYSTACK_SECRET_KEY');
 
 function send_webhook($url, $payload, $secret, $headers = []) {
     $json = json_encode($payload);

@@ -4,35 +4,32 @@ namespace App\Console\Commands;
 
 use App\Models\WebhookEvent;
 use App\Models\DeadLetter;
-use App\Jobs\ProcessWebhookEventJob;
+use App\Jobs\ProcessWebhookJob;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 
 class ReplayWebhookCommand extends Command
 {
-    protected $signature = 'hookledger:replay {event_id? : The ID of the event to replay} {--dead : Replay all dead-lettered events}';
-
-    protected $description = 'Replay a specific webhook event or all dead-lettered events';
+    protected $signature = 'hookledger:replay {event_id? : The internal ID of the event to replay} {--dead : Replay all unresolved dead letters}';
+    protected $description = 'Replay a specific webhook or all dead letters idempotently';
 
     public function handle(): int
     {
         if ($this->option('dead')) {
-            $count = 0;
-            DeadLetter::whereNull('replayed_at')->chunkById(100, function ($letters) use (&$count) {
-                foreach ($letters as $letter) {
-                    $this->replay($letter->webhook_event_id);
-                    $letter->update(['replayed_at' => now()]);
-                    $count++;
-                }
-            });
-            $this->info("Successfully re-queued {$count} dead-lettered events.");
+            $deadLetters = DeadLetter::whereNull('replayed_at')->get();
+            $this->info("Replaying {$deadLetters->count()} dead letters...");
+            
+            foreach ($deadLetters as $letter) {
+                $this->replay($letter->webhook_event_id);
+                $letter->update(['replayed_at' => now()]);
+            }
+            
+            $this->info("Successfully re-queued all unresolved dead letters.");
             return self::SUCCESS;
         }
 
         $eventId = $this->argument('event_id');
-
-        if (! $eventId) {
-            $this->error('Please provide an event_id or use the --dead flag.');
+        if (!$eventId) {
+            $this->error("Provide an event_id or use the --dead flag.");
             return self::FAILURE;
         }
 
@@ -45,10 +42,7 @@ class ReplayWebhookCommand extends Command
     protected function replay(int $id): void
     {
         $event = WebhookEvent::findOrFail($id);
-        
-        // Reset status to pending so the job processes it again
-        $event->update(['status' => 'pending']);
-        
-        ProcessWebhookEventJob::dispatch($id)->onQueue('webhooks');
+        $event->update(['status' => 'received']);
+        ProcessWebhookJob::dispatch($id)->onQueue('webhooks');
     }
 }

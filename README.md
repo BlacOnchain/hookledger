@@ -6,38 +6,43 @@ Production-grade webhook reconciliation engine for financial systems.
 
 ```mermaid
 graph TD
-    P[Paystack] -->|POST| H[HookLedger API]
-    H -->|Validate Signature| I[Idempotent Ingestion]
+    P[Paystack] -->|POST| H[HookLedger]
+    H -->|Verify Signature| I[Ingestion]
     I -->|Store Raw| DB[(MySQL 8.0)]
     I -->|Dispatch| Q[Redis Queue]
-    Q -->|Process| J[Worker Job]
+    Q -->|Process Job| J[Worker]
     J -->|Row Lock| DB
-    J -->|Success| L[Ledger Entry]
-    J -->|Fail| R[Exponential Backoff]
+    J -->|Handle Logic| DB
+    J -->|Success| L[Ledger]
+    J -->|Failure| R[Retry/Backoff]
     R -->|Exhausted| DLQ[Dead Letter Queue]
     S[Scheduler] -->|15m| RC[Reconciler]
-    RC -->|Fetch Missing| P
+    RC -->|Verify Drift| P
     RC -->|Repair| I
 ```
 
 ## ADRs
 
-### ADR 001: Idempotency Strategy
-**Decision:** Use a composite unique constraint on `(provider, event_id)` and a status guard.
-**Rationale:** Database-level constraints are the final source of truth. Application-level checks are prone to race conditions unless using pessimistic locking.
+### ADR 001: Idempotency via Unique Constraints
+**Decision:** Use a composite unique key `(provider, event_id)` at the database level.
+**Rationale:** Application-level checks are prone to race conditions. The database is the final source of truth for event uniqueness.
 
-### ADR 002: Retry Strategy
-**Decision:** Exponential backoff with full jitter (max 5 tries).
-**Rationale:** Prevents thundering herds after a downstream recovery. Jitter spreads out requests across the backoff window.
+### ADR 002: Pessimistic Locking during Processing
+**Decision:** Use `lockForUpdate()` inside a database transaction during job execution.
+**Rationale:** Prevents multiple queue workers from processing the same event simultaneously if retries or delays cause overlaps.
 
-### ADR 003: Why a Queue?
-**Decision:** Immediate 200 OK responses with background processing.
-**Rationale:** Webhook providers have short timeouts. Decoupling ingestion from execution ensures we don't lose data if the internal processing logic is slow.
+### ADR 003: Push-Pull Reconciliation Model
+**Decision:** Combine real-time webhooks (Push) with a scheduled API poller (Pull).
+**Rationale:** Webhooks are "best-effort". Silent drops occur due to network partitions or provider downtime. Pull-based verification closes the integrity loop.
 
-## Benchmarks
+## Targets (not yet measured)
 
-| Metric | Target |
-| :--- | :--- |
-| Ingestion Latency (p95) | < 15ms |
-| Max Throughput | 2,500 req/s |
-| Duplicate Handling Error Rate | 0.00% |
+- Ingestion Latency (p95): < 15ms
+- Recovery Time Objective: < 15m
+- Data Integrity: 100.0%
+
+## Failure Modes
+
+- **Database Partition**: Ingestion fails (500) if primary DB is unreachable (Transactional Inbox requirement).
+- **Redis Saturation**: Webhooks are ingested but processing lags behind.
+- **Provider API Outage**: Reconciler retries until service is restored.

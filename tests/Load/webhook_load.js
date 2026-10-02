@@ -5,22 +5,27 @@ export let options = {
     vus: 10,
     duration: '30s',
     thresholds: {
-        'http_req_duration': ['p(95)<15'], // 95% of requests must be under 15ms
+        'http_req_duration': ['p(95)<15'],
     },
 };
 
 export default function () {
     const url = 'http://localhost/api/webhooks/paystack';
     const payload = JSON.stringify({
-        id: `k6_${Math.random()}`,
         event: 'charge.success',
-        reference: 'k6_ref',
+        data: {
+            id: `k6_${Math.random()}`,
+            reference: `ref_${Math.random()}`,
+            amount: 5000,
+            currency: 'NGN',
+            customer: { email: 'k6@example.com' }
+        }
     });
 
     const params = {
         headers: {
             'Content-Type': 'application/json',
-            'x-paystack-signature': 'mock_signature_for_test',
+            'x-paystack-signature': 'mock_signature_for_test', // In k6 we'd ideally compute this
         },
     };
 
