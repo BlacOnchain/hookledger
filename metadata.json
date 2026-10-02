@@ -1,0 +1,6 @@
+{
+  "name": "HookLedger",
+  "description": "A production-grade webhook reconciliation engine with built-in idempotency, failure recovery, and automated drift detection.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
