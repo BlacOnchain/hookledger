@@ -1,27 +1,43 @@
 # HookLedger
 
-A production-grade webhook reconciliation engine designed for high-reliability financial systems.
+Production-grade webhook reconciliation engine for financial systems.
 
-## Key Features
+## Architecture
 
-- **HMAC-SHA512 Verification**: Constant-time signature validation for secure ingestion.
-- **Atomic Idempotency**: Guaranteed single-delivery processing using database-level constraints.
-- **Intelligent Retries**: Exponential backoff with full jitter to prevent thundering herd scenarios.
-- **Drift Detection**: Automated reconciliation between local records and upstream provider APIs.
-- **Dead Letter Management**: Advanced handling for exhausted retries and forensic auditing.
+```mermaid
+graph TD
+    P[Paystack] -->|POST| H[HookLedger API]
+    H -->|Validate Signature| I[Idempotent Ingestion]
+    I -->|Store Raw| DB[(MySQL 8.0)]
+    I -->|Dispatch| Q[Redis Queue]
+    Q -->|Process| J[Worker Job]
+    J -->|Row Lock| DB
+    J -->|Success| L[Ledger Entry]
+    J -->|Fail| R[Exponential Backoff]
+    R -->|Exhausted| DLQ[Dead Letter Queue]
+    S[Scheduler] -->|15m| RC[Reconciler]
+    RC -->|Fetch Missing| P
+    RC -->|Repair| I
+```
 
-## Stack
+## ADRs
 
-- **Runtime**: PHP 8.3 / Laravel 11
-- **Database**: MySQL 8.0 (InnoDB)
-- **Cache/Queue**: Redis 7.2
-- **Testing**: Pest PHP
-- **Infrastructure**: Docker Compose
+### ADR 001: Idempotency Strategy
+**Decision:** Use a composite unique constraint on `(provider, event_id)` and a status guard.
+**Rationale:** Database-level constraints are the final source of truth. Application-level checks are prone to race conditions unless using pessimistic locking.
 
-## Quick Start
+### ADR 002: Retry Strategy
+**Decision:** Exponential backoff with full jitter (max 5 tries).
+**Rationale:** Prevents thundering herds after a downstream recovery. Jitter spreads out requests across the backoff window.
 
-1. Clone the repository.
-2. Copy `.env.example` to `.env` and configure your `PAYSTACK_SECRET_KEY`.
-3. Run `docker-compose up -d`.
-4. Run `php artisan migrate`.
-5. Point your webhook provider to `POST /webhooks/paystack`.
+### ADR 003: Why a Queue?
+**Decision:** Immediate 200 OK responses with background processing.
+**Rationale:** Webhook providers have short timeouts. Decoupling ingestion from execution ensures we don't lose data if the internal processing logic is slow.
+
+## Benchmarks
+
+| Metric | Target |
+| :--- | :--- |
+| Ingestion Latency (p95) | < 15ms |
+| Max Throughput | 2,500 req/s |
+| Duplicate Handling Error Rate | 0.00% |

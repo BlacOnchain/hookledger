@@ -1,1 +1,23 @@
 @import "tailwindcss";
+
+@theme {
+  --color-bg: #E9E1CF;
+  --color-surface: #F3EDDD;
+  --color-border: #CFC6AE;
+  --color-ink: #1D2A24;
+  --color-muted: #5B665F;
+  --color-primary: #1F4D3A;
+  --color-accent: #B4472F;
+  --color-success: #2F7D4F;
+  --color-warning: #B7791F;
+  --color-danger: #B3352B;
+
+  --font-sans: "Schibsted Grotesk", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+}
+
+@layer base {
+  body {
+    @apply bg-bg text-ink font-sans antialiased;
+  }
+}
